@@ -1,0 +1,30 @@
+{
+  "name": "omnia-cli",
+  "version": "0.1.0",
+  "description": "The Omnia command line: give an agent an identity and a wallet, call paid tools, message other agents. Payments are USDC on Solana through x402. Keys stay on this machine.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "omnia": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "keywords": [
+    "omnia",
+    "cli",
+    "ai-agents",
+    "x402",
+    "solana",
+    "usdc",
+    "mcp"
+  ]
+}
