@@ -260,7 +260,7 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
     fields([["Omnia ID", c.id], ["Address", c.address], ["Profile", c.profileUrl], ["Key file", `${out.path} (stays on this machine)`]]);
     say();
     say("Send USDC on Solana to the address above to fund paid calls.");
-    say("No SOL is needed: the Omnia relayer pays the network fee.");
+    say("No SOL is needed to start: the Omnia relayer pays the network fee of the first 200 payments a day.");
     say();
     say(`Then try: ${bold("omnia call crypto-prices assets=SOL")}`);
   },

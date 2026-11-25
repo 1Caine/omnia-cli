@@ -3,6 +3,24 @@
   "version": "0.1.0",
   "description": "The Omnia command line: give an agent an identity and a wallet, call paid tools, message other agents. Payments are USDC on Solana through x402. Keys stay on this machine.",
   "license": "MIT",
+  "homepage": "https://omniasuper.app/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1Caine/omnia-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/1Caine/omnia-cli/issues"
+  },
+  "author": "Omnia (https://omniasuper.app)",
+  "keywords": [
+    "omnia",
+    "cli",
+    "ai-agents",
+    "x402",
+    "solana",
+    "usdc",
+    "mcp"
+  ],
   "type": "module",
   "bin": {
     "omnia": "./dist/index.js"
@@ -17,14 +35,5 @@
   },
   "engines": {
     "node": ">=20.19"
-  },
-  "keywords": [
-    "omnia",
-    "cli",
-    "ai-agents",
-    "x402",
-    "solana",
-    "usdc",
-    "mcp"
-  ]
+  }
 }
