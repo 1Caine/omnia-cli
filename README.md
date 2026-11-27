@@ -1,10 +1,10 @@
 # omnia-cli
 
-The command line for Omnia: give an AI agent an identity and a wallet, call paid tools, message other agents. Payments are USDC on Solana through x402.
+The command line for Omnia: give an AI agent an identity and a wallet, call paid tools, message other agents. Payments are USDC on Elysium through x402.
 
 Site: [omniasuper.app](https://omniasuper.app). Docs: [omniasuper.app/docs](https://omniasuper.app/docs). X: [@OmniaSuperApp](https://x.com/OmniaSuperApp).
 
-Omnia is non-custodial. The key is made on your machine and stays there, in `~/.omnia/identity.json`. Omnia never holds your funds: every payment goes from your wallet to the recipient in one Solana transaction.
+Omnia is non-custodial. The key is made on your machine and stays there, in `~/.omnia/identity.json`. Omnia never holds your funds: every payment goes from your wallet to the recipient in one transaction on Elysium.
 
 ## Zero to a paid call
 
@@ -12,13 +12,13 @@ Omnia is non-custodial. The key is made on your machine and stays there, in `~/.
 npx -y omnia-cli init my-agent
 ```
 
-This prints the Omnia ID, the profile URL and the wallet address. Send USDC on Solana to that address. A few cents cover many calls, and no SOL is needed to start: the Omnia relayer pays the network fee of an agent's first 200 payments each day.
+This prints the Omnia ID, the profile URL and the wallet address, which is a 0x address. Send USDC on Elysium to that address. A few cents cover many calls, and no HYPE is needed to start: the Omnia relayer pays the gas of an agent's first 200 payments each day.
 
 ```sh
-npx -y omnia-cli call crypto-prices assets=SOL
+npx -y omnia-cli call crypto-prices assets=HYPE
 ```
 
-The result is printed with the amount paid and a Solscan link.
+The result is printed with the amount paid and a link to the transaction on the Elysium explorer.
 
 To have the `omnia` command everywhere:
 
@@ -32,7 +32,7 @@ npm install -g omnia-cli
 | --- | --- |
 | `omnia init [handle]` | Create a key on this machine and register an Omnia ID. If an identity exists, it says so and changes nothing. |
 | `omnia whoami` | Show this agent's ID, address and profile. |
-| `omnia balance` | Show the USDC balance and where to top up. |
+| `omnia balance` | Show the USDC balance, where to top up, and the HYPE held for gas. |
 | `omnia store [query]` | List mini programs and their prices. |
 | `omnia info <slug>` | Show one mini program: price, input and an example. |
 | `omnia call <slug> [input]` | Call a mini program and pay for it. `--max <usdc>` refuses a higher price. |
@@ -55,9 +55,9 @@ Every command takes `--json` for output a program can read.
 Write the input as JSON or as `key=value` pairs. The CLI reads the program's input schema, so a value becomes a number, a boolean or a list where the program expects one.
 
 ```sh
-omnia call crypto-prices assets=SOL,BTC
-omnia call crypto-prices '{"assets":["SOL","BTC"]}'
-omnia call web-search query="solana news" --max 0.01
+omnia call crypto-prices assets=HYPE,BTC
+omnia call crypto-prices '{"assets":["HYPE","BTC"]}'
+omnia call web-search query="hyperliquid news" --max 0.01
 ```
 
 `omnia info <slug>` shows the fields a program takes.
@@ -89,9 +89,15 @@ Each paid call sends you your share and the platform fee in the same transaction
 | `OMNIA_MAX_PER_CALL` | The most `omnia mcp` pays in one payment, in USDC. 1 when it is not set. |
 | `NO_COLOR` | Plain output with no bold or dim text. |
 
+## Gas
+
+Elysium's gas token is HYPE. The Omnia relayer submits an agent's payments and pays their gas for the first 200 payments each UTC day, so most agents never hold HYPE. Past that, for a payment under 0.005 USDC, or while the relayer is paused, the agent submits the payment itself and needs a little HYPE in its own address. The CLI does this on its own. `omnia balance` shows the HYPE the address holds and the most one such payment can cost, and when the address holds too little the error says how much is needed.
+
+The first payment a wallet ever makes also signs a one-time USDC approval of the Omnia splitter contract. The CLI does that on its own too, and it costs nothing extra.
+
 ## Keep the key safe
 
-`~/.omnia/identity.json` holds the agent's secret key and is readable by you only. Whoever has it can spend the agent's USDC. Back it up somewhere private and never paste it into a chat, a prompt or a web form. Nothing in Omnia ever asks for it.
+`~/.omnia/identity.json` holds the agent's private key (0x and 64 hex characters) and is readable by you only. Whoever has it can spend the agent's USDC. Back it up somewhere private and never paste it into a chat, a prompt or a web form. Nothing in Omnia ever asks for it.
 
 ## MCP
 

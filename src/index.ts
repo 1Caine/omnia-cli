@@ -4,11 +4,11 @@
  *
  * It keeps the agent's key in ~/.omnia/identity.json on this machine and uses
  * it to sign requests and payments. The key is never sent anywhere. Payments
- * are USDC on Solana and go straight from the agent's wallet to the recipient.
+ * are USDC on Elysium and go straight from the agent's wallet to the recipient.
  */
 import { readFile } from "node:fs/promises";
 import pkg from "../package.json";
-import { DEFAULT_BASE_URL, Omnia, OmniaError, formatUsdc, type Message, type ProgramView } from "../../sdk/src/client";
+import { DEFAULT_BASE_URL, Omnia, OmniaError, explorerAddress, explorerTx, formatHype, formatUsdc, type Message, type ProgramView } from "../../sdk/src/client";
 import { clientFor, createIdentity, identityFromEnv, identityPath, loadIdentity, resolveIdentity } from "../../sdk/src/node";
 import { displayHandle, normalizeHandle, randomNonce, type SignInChallenge } from "../../sdk/src/protocol";
 import { runStdio } from "../../mcp/src/server";
@@ -83,7 +83,7 @@ ${bold("Store")}
   omnia store [query]              List mini programs and their prices
   omnia info <slug>                Show one mini program: price, input, example
   omnia call <slug> [input]        Call a mini program and pay for it
-                                   input is JSON, or key=value pairs: assets=SOL
+                                   input is JSON, or key=value pairs: assets=HYPE
                                    --max <usdc> refuses a higher price
   omnia job <id> [--wait]          Show the state of a long-running call
 
@@ -109,7 +109,8 @@ ${bold("Options")}
   OMNIA_HANDLE, OMNIA_SECRET_KEY   Use this identity instead of the identity file
 
 The key stays on this machine, in ${dim("~/.omnia/identity.json")}. Omnia never holds
-your funds: every payment goes from your wallet to the recipient in one transaction.`;
+your funds: every payment is USDC on Elysium and goes from your wallet to the
+recipient in one transaction.`;
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -248,21 +249,21 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
       say(`An Omnia ID already exists ${fromEnv ? "in the environment" : "on this machine"}: ${bold(c.id)}`);
       say("Nothing was changed.");
       say();
-      fields([["Address", c.address], ["Profile", c.profileUrl], ["Key file", fromEnv ? null : path]]);
+      fields([["Address", c.address], ["Explorer", explorerAddress(c.address)], ["Profile", c.profileUrl], ["Key file", fromEnv ? null : path]]);
       return;
     }
     const handle = run.args[0] ? normalizeHandle(run.args[0]) : `agent-${randomNonce(6).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6).padEnd(4, "0")}`;
     const out = await createIdentity({ handle, about: flagText(run, "about"), baseUrl: run.url, path });
     const c = out.client;
-    if (run.json) return say(pretty({ created: true, id: c.id, handle: c.handle, address: c.address, profile: c.profileUrl, identityFile: out.path, topUp: { address: c.address, asset: "USDC", network: "Solana" } }));
+    if (run.json) return say(pretty({ created: true, id: c.id, handle: c.handle, address: c.address, explorer: explorerAddress(c.address), profile: c.profileUrl, identityFile: out.path, topUp: { address: c.address, asset: "USDC", network: "Elysium" } }));
     say(`Registered ${bold(c.id)}`);
     say();
-    fields([["Omnia ID", c.id], ["Address", c.address], ["Profile", c.profileUrl], ["Key file", `${out.path} (stays on this machine)`]]);
+    fields([["Omnia ID", c.id], ["Address", c.address], ["Explorer", explorerAddress(c.address)], ["Profile", c.profileUrl], ["Key file", `${out.path} (stays on this machine)`]]);
     say();
-    say("Send USDC on Solana to the address above to fund paid calls.");
-    say("No SOL is needed to start: the Omnia relayer pays the network fee of the first 200 payments a day.");
+    say("Send USDC on Elysium to the address above to fund paid calls.");
+    say("No HYPE is needed to start: the Omnia relayer pays the gas of the first 200 payments a day.");
     say();
-    say(`Then try: ${bold("omnia call crypto-prices assets=SOL")}`);
+    say(`Then try: ${bold("omnia call crypto-prices assets=HYPE")}`);
   },
 
   async whoami(run) {
@@ -272,6 +273,7 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
     fields([
       ["Omnia ID", bold(c.id)],
       ["Address", c.address],
+      ["Explorer", explorerAddress(c.address)],
       ["Profile", c.profileUrl],
       ["About", me.agent.about],
       ["Owner", me.agent.ownerVerified ? `${me.agent.owner} (verified)` : me.agent.namedOwner ? `${me.agent.namedOwner} (named, not yet verified)` : "none"],
@@ -286,16 +288,21 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
   async balance(run) {
     const c = await agent(run);
     const w = await c.wallet(run.args[0]);
-    if (run.json) return say(pretty(w));
-    const limits = w.limits as { remainingMicros?: string; dailyMicros?: string; perTxMicros?: string } | undefined;
+    // What a self-paid payment needs is known for this agent's own key only. An older deployment may not say.
+    const gas = run.args[0] === undefined || normalizeHandle(run.args[0]) === c.handle ? await c.gas().catch(() => null) : null;
+    if (run.json) return say(pretty(gas ? { ...w, gas } : w));
+    const limits = w.mode === "guarded" ? w.limits : null;
     fields([
       ["Balance", bold(`${formatUsdc(w.balanceMicros)} USDC`)],
-      ["Wallet", w.mode === "guarded" ? `guarded${w.frozen === true ? ", frozen" : ""}` : "free"],
-      ["Left today", limits?.remainingMicros !== undefined ? `${formatUsdc(limits.remainingMicros)} of ${formatUsdc(limits.dailyMicros ?? "0")} USDC` : null],
-      ["Per payment", limits?.perTxMicros && limits.perTxMicros !== "0" ? `${formatUsdc(limits.perTxMicros)} USDC at most` : null],
-      ["Top up", `send USDC on Solana to ${w.topUpAddress}`],
+      ["Wallet", w.mode === "guarded" ? `guarded, a Safe at ${w.safe}${w.frozen ? ", frozen" : ""}` : "free"],
+      ["Left today", limits ? `${formatUsdc(limits.remainingMicros)} of ${formatUsdc(limits.dailyMicros)} USDC` : null],
+      ["Per payment", limits && limits.perTxMicros !== "0" ? `${formatUsdc(limits.perTxMicros)} USDC at most` : null],
+      ["Recipients", limits && limits.destinations.length > 0 ? `${limits.destinations.length} allowed` : null],
+      ["Top up", `send USDC on Elysium to ${w.topUpAddress}`],
+      ["Explorer", explorerAddress(w.topUpAddress)],
+      ["Gas", gas ? `${formatHype(gas.balanceWei)} HYPE held, and none is needed while the relayer sponsors the payments. A payment the agent submits itself can cost up to ${gas.maxCost} HYPE.` : null],
     ]);
-    if (!w.hasUsdcAccount) say(dim("This wallet has not received USDC yet."));
+    if (w.mode === "free" && w.approved === false) say(dim("The first payment from this wallet also signs a one-time USDC approval of the Omnia splitter. The CLI does that on its own."));
   },
 
   async store(run) {
@@ -368,7 +375,7 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
     const id = need(run, 0, "The job id", "job <id> [--wait]");
     const job = run.flags.wait ? await c.waitForJob(id, { timeoutMs: 300_000 }) : await c.job(id);
     if (run.json) return say(pretty(job));
-    fields([["Job", job.id], ["Program", job.program], ["Status", bold(job.status)], ["Error", job.error], ["Refund", job.refund ? `https://solscan.io/tx/${job.refund.transaction}` : null]]);
+    fields([["Job", job.id], ["Program", job.program], ["Status", bold(job.status)], ["Error", job.error], ["Refund", job.refund ? explorerTx(job.refund.transaction) : null]]);
     if (job.result !== null && job.result !== undefined) {
       say();
       say(pretty(job.result));
@@ -516,8 +523,16 @@ const COMMANDS: Record<string, (run: Run) => Promise<void>> = {
 function hint(e: OmniaError, address: string | null): string | null {
   switch (e.code) {
     case "insufficient_funds":
-    case "account_missing":
-      return address ? `Send USDC on Solana to ${address}, then try again. Check with: omnia balance` : "Top up the wallet with USDC on Solana, then try again.";
+      return address ? `Send USDC on Elysium to ${address}, then try again. Check with: omnia balance` : "Top up the wallet with USDC on Elysium, then try again.";
+    case "network_fee_unfunded":
+    case "sponsorship_unavailable":
+      return `A payment the relayer does not sponsor is submitted by the agent itself, which needs a little HYPE for gas${address ? ` in ${address}` : ""}. See what it holds and what a payment can cost with: omnia balance`;
+    case "stale_transaction":
+      return "Another transaction from this key went through in the meantime. Run the command again.";
+    case "gas_limit_too_low":
+      return "The payment needs more gas than the deployment's own terms allowed. Run the command again, and report it if it keeps happening.";
+    case "unexpected_contract":
+      return "The offer did not name the Omnia contracts this CLI was built with. If you set --url or OMNIA_URL, check it.";
     case "auth_handle":
       return "This Omnia ID is not registered on that deployment. If you set --url or OMNIA_URL, check it.";
     case "auth_expired":
